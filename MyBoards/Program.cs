@@ -66,14 +66,21 @@ if(!users.Any())
     dbContext.SaveChanges();
 }
 
-// endpoint 
+// endpoint (zapytanie asynchroniczne)
 
-app.MapGet("data", (MyBoardsContext db) =>
+app.MapGet("data", async (MyBoardsContext db) =>
 {
-    var toDoWorkItems =  db.WorkItems.Where(w => w.StateId == 1).ToList();
-    return new { toDoWorkItems };
-    
-   
+    var authorsCommentCounts = await db.Comments
+    .GroupBy(c => c.AuthorId)
+    .Select(g => new { g.Key, Count = g.Count() })
+    .ToListAsync();
+
+    var topAuthor = authorsCommentCounts
+    .First(a => a.Count == authorsCommentCounts.Max(acc => acc.Count));
+
+    var userDetails = db.Users.First(u => u.Id == topAuthor.Key);
+
+    return new { userDetails, commentCount = topAuthor.Count};
 });
 
 
