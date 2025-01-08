@@ -1,11 +1,20 @@
+using Microsoft.AspNetCore.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using MyBoards.Entities;
 using System;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// podczas serializacji zostanie pominiêta nieskoñczonoa referencja miêdzy zale¿noœciami, która jest zapêtlona
+
+builder.Services.Configure<JsonOptions>(options =>
+{
+    options.SerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+});
 
 builder.Services.AddDbContext<MyBoardsContext>(
     option => option.UseSqlServer(builder.Configuration.GetConnectionString("MyBoardsConnectionString"))
@@ -32,13 +41,13 @@ var pendingMigrations = dbContext.Database.GetPendingMigrations(); // Sprawdza, 
 
 if (pendingMigrations.Any())
 {
-    dbContext.Database.Migrate(); 
+    dbContext.Database.Migrate();
 }
 
 // customowa logika seedowania
 
 var users = dbContext.Users.ToList();
-if(!users.Any())
+if (!users.Any())
 {
     var user1 = new User()
     {
@@ -80,8 +89,28 @@ app.MapGet("data", async (MyBoardsContext db) =>
 
     var userDetails = db.Users.First(u => u.Id == topAuthor.Key);
 
-    return new { userDetails, commentCount = topAuthor.Count};
+    return new { userDetails, commentCount = topAuthor.Count };
 });
+
+// Include zawiera w sobie Join dlatego jest lepszy ni¿ tworzenie osobnego zapytania
+// ThenInclude - jeœli chcemy coœ do³¹czyæ do do³¹czonej encji 
+// Metody te pozwalaj¹ na ³adowanie w³aœciwoœci powi¹zanych w naszych encjach.
+
+app.MapGet("data2", async (MyBoardsContext db) =>
+{
+    var user = await db.Users
+    .Include(u => u.Comments).ThenInclude(w => w.WorkItem) 
+    .Include(a => a.Address)
+    .FirstAsync(u => u.Id == Guid.Parse("68366DBE-0809-490F-CC1D-08DA10AB0E61"));
+
+
+    // var userComments = await db.Comments.Where(c => c.AuthorId == user.Id).ToListAsync();
+
+    return user;
+
+});
+
+// endpoint post do update'u 
 
 app.MapPost("update", async (MyBoardsContext db) =>
 {
@@ -96,6 +125,65 @@ app.MapPost("update", async (MyBoardsContext db) =>
     return epic;
 
 });
+
+// endpoint create
+
+app.MapPost("create", async (MyBoardsContext db) =>
+{
+    Tag mvcTag = new Tag()
+    {
+        Value = "MVC"
+    };
+
+    Tag aspTag = new Tag()
+    {
+        Value = "ASP"
+    };
+
+    var tags = new List<Tag>() { mvcTag, aspTag };
+
+    await db.Tags.AddRangeAsync(mvcTag, aspTag); //AddRange w porównianiu do Add pozwala na dodanie wielu wartoœci encji jednorazowo
+    await db.SaveChangesAsync();
+
+    return tags;
+});
+
+app.MapPost("createWithDependency", async (MyBoardsContext db) =>
+{
+    var address = new Address()
+    {
+        Id = Guid.NewGuid(),
+        City = "Kraków",
+        Country = "Poland",
+        Street = "D³uga"
+    };
+
+    var user = new User()
+    {
+        Email = "user@test.com",
+        FullName = "Test User",
+        Address = address,
+    };
+
+    db.Users.Add(user);
+    await db.SaveChangesAsync();
+
+    // Tworzenie DTO
+    var result = new
+    {
+        user.Email,
+        user.FullName,
+        Address = new
+        {
+            address.City,
+            address.Country,
+            address.Street
+        }
+    };
+
+    return result;
+});
+
 
 app.Run();
 
