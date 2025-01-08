@@ -75,28 +75,40 @@ if (!users.Any())
     dbContext.SaveChanges();
 }
 
-// endpoint (zapytanie asynchroniczne)
+// je¿eli mamy dane, które nie s¹ modyfikowane mo¿emy zoptymalizacowaæ dane przy u¿yciu EF
+// poniewa¿ nie bêd¹ œledzone przez czêœæ Trackera
 
-app.MapGet("data", async (MyBoardsContext db) =>
+app.MapGet("ChangeTracker_NoTracking", async (MyBoardsContext db) =>
 {
-    var authorsCommentCounts = await db.Comments
-    .GroupBy(c => c.AuthorId)
-    .Select(g => new { g.Key, Count = g.Count() })
-    .ToListAsync();
+    var states = db.WorkItemStates
+    .AsNoTracking()
+    .ToList();
 
-    var topAuthor = authorsCommentCounts
-    .First(a => a.Count == authorsCommentCounts.Max(acc => acc.Count));
+    var entries1 = db.ChangeTracker.Entries();
 
-    var userDetails = db.Users.First(u => u.Id == topAuthor.Key);
+    return states;
+});
 
-    return new { userDetails, commentCount = topAuthor.Count };
+app.MapGet("data_ChangeTracker", async (MyBoardsContext db) =>
+{
+    var workItem = new Epic()
+    {
+        Id = 2
+    };
+
+    var entry = db.Attach(workItem); //dbcontext œledzi workItem o konkretnym Id
+    entry.State = EntityState.Deleted; // ustawiony stan na delete (musi wykonaæ polecenie delete z tabeli workItems)
+
+    db.SaveChanges();
+
+    return workItem;
 });
 
 // Include zawiera w sobie Join dlatego jest lepszy ni¿ tworzenie osobnego zapytania
 // ThenInclude - jeœli chcemy coœ do³¹czyæ do do³¹czonej encji 
 // Metody te pozwalaj¹ na ³adowanie w³aœciwoœci powi¹zanych w naszych encjach.
 
-app.MapGet("data2", async (MyBoardsContext db) =>
+app.MapGet("data", async (MyBoardsContext db) =>
 {
     var user = await db.Users
     .Include(u => u.Comments).ThenInclude(w => w.WorkItem) 
@@ -109,8 +121,6 @@ app.MapGet("data2", async (MyBoardsContext db) =>
     return user;
 
 });
-
-// endpoint post do update'u 
 
 app.MapPost("update", async (MyBoardsContext db) =>
 {
@@ -125,8 +135,6 @@ app.MapPost("update", async (MyBoardsContext db) =>
     return epic;
 
 });
-
-// endpoint create
 
 app.MapPost("create", async (MyBoardsContext db) =>
 {
