@@ -184,18 +184,19 @@ app.MapPost("createWithDependency", async (MyBoardsContext db) =>
     return result;
 });
 
+// po zmianie w dbcontext z 'DeleteBehavior.NoAction' na 'DeleteBehavior.ClientCascade'
+// kaskadowe usuwanie bêdzie automatyczne jeœli mamy powi¹zane encje (z u¿yciem 'Include')
+
 app.MapDelete("delete", async (MyBoardsContext db) => 
 {
     var user = await db.Users
-    .FirstAsync(u => u.Id == Guid.Parse("78CF834E-7724-4995-CBC4-08DA10AB0E61")); // 'user' o konkretnym id
+        .Include(u => u.Comments)
+        .FirstAsync(u => u.Id == Guid.Parse("F26E49C7-2342-4F62-CBCC-08DA10AB0E61"));
 
-    var userComments = db.Comments.Where(c => c.AuthorId == user.Id).ToList();
-    db.RemoveRange(userComments); // RemoveRange poniewa¿ operujemy na liœcie komentarzy nie jednym obiekcie jak User
-    await db.SaveChangesAsync();
-
-    db.Users.Remove(user); 
+    db.Users.Remove(user);
 
     await db.SaveChangesAsync();
+
 });
 
 

@@ -97,8 +97,7 @@ namespace MyBoards.Entities
                 .HasOne(c => c.Author)
                 .WithMany(a => a.Comments)
                 .HasForeignKey(c => c.AuthorId)
-                .OnDelete(DeleteBehavior.NoAction);  // aby usunąć kaskadowe zachowanie dla 'user' (ponieważ Tabela comments ma 2 zależności teraz
-                                                     // co za tym idzie; komentarz byłby usunięty przy usuwnaiu WorkItemu jak i zarówno użytkownika
+                .OnDelete(DeleteBehavior.ClientCascade);  // automatyczne kaskadowe usuwanie 
 
             // relacja modelu 1 do 1 między tabelami 'User' a 'Addresses'
 
