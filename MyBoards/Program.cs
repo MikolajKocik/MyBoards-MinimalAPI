@@ -87,9 +87,9 @@ app.MapPost("update", async (MyBoardsContext db) =>
 {
     Epic epic = await db.Epics.FirstAsync(epic => epic.Id == 1);
 
-    epic.Area = "Updated area";
-    epic.Priority = 1;
-    epic.StartDate = DateTime.Now;
+    var rejectedState = await db.WorkItemStates.FirstAsync(a => a.Value == "Rejected");
+
+    epic.State = rejectedState;
 
     await db.SaveChangesAsync();
 
