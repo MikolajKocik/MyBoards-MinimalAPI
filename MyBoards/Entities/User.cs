@@ -5,7 +5,7 @@ namespace MyBoards.Entities
     public class User
     {
         public Guid Id { get; set; } // klucz główny
-        public string Fullname { get; set; }
+        public string FullName { get; set; }
         public string Email { get; set; }
 
         public Address Address { get; set; }

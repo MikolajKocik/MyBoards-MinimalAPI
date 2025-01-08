@@ -43,7 +43,7 @@ if(!users.Any())
     var user1 = new User()
     {
         Email = "user1@test.com",
-        Fullname = "User One",
+        FullName = "User One",
         Address = new Address()
         {
             City = "Warszawa",
@@ -54,7 +54,7 @@ if(!users.Any())
     var user2 = new User()
     {
         Email = "user2@test.com",
-        Fullname = "User Two",
+        FullName = "User Two",
         Address = new Address()
         {
             City = "Kraków",
@@ -65,6 +65,16 @@ if(!users.Any())
     dbContext.Users.AddRange(user1, user2);
     dbContext.SaveChanges();
 }
+
+// endpoint 
+
+app.MapGet("data", (MyBoardsContext db) =>
+{
+    var toDoWorkItems =  db.WorkItems.Where(w => w.StateId == 1).ToList();
+    return new { toDoWorkItems };
+    
+   
+});
 
 
 app.Run();
