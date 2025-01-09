@@ -75,6 +75,36 @@ if (!users.Any())
     dbContext.SaveChanges();
 }
 
+// przy u¿yciu 'FromSqlRaw' z parametrem minWorkItemsCount, kod by³by podatny na ataki sql injection
+// RawSql u¿ywamy gdy nie da siê napisaæ polecenia w LINQ 
+// metody muszê zwracaæ dok³adnie taki model jaki mam w DbSet (nie moze zabrakn¹æ danej kolumny (pola))
+
+app.MapGet("RawSQL_data", async (MyBoardsContext db) =>
+{
+    var minWorkItemsCount = "85";
+
+    var states = db.WorkItemStates  
+    .FromSqlInterpolated($@"        
+    SELECT wis.Id, wis.Value
+    FROM WorkItemStates wis
+    JOIN WorkItems wi on wi.StateId = wis.Id
+    GROUP BY wis.Id, wis.Value
+    HAVING COUNT(*) > {minWorkItemsCount}"
+    )
+    .ToList();
+
+    // w zale¿noœci czy korzystamy z parametru czy nie, wybieramy bezpoœredni¹ opcjê sql (dla bezppoœr. zapytañ)
+
+    db.Database.ExecuteSqlRaw(@"
+    UPDATE Comments
+    SET UpdatedDate = GETDATE()
+    WHERE AuthorId = '888FF7E0-E791-4EFE-CC0A-08DA10AB0E61'");
+
+    var entries = db.ChangeTracker.Entries();
+
+    return states;
+});
+
 // je¿eli mamy dane, które nie s¹ modyfikowane mo¿emy zoptymalizacowaæ dane przy u¿yciu EF
 // poniewa¿ nie bêd¹ œledzone przez czêœæ Trackera
 
@@ -111,7 +141,7 @@ app.MapGet("data_ChangeTracker", async (MyBoardsContext db) =>
 app.MapGet("data", async (MyBoardsContext db) =>
 {
     var user = await db.Users
-    .Include(u => u.Comments).ThenInclude(w => w.WorkItem) 
+    .Include(u => u.Comments).ThenInclude(w => w.WorkItem)
     .Include(a => a.Address)
     .FirstAsync(u => u.Id == Guid.Parse("68366DBE-0809-490F-CC1D-08DA10AB0E61"));
 
@@ -195,7 +225,7 @@ app.MapPost("createWithDependency", async (MyBoardsContext db) =>
 // po zmianie w dbcontext z 'DeleteBehavior.NoAction' na 'DeleteBehavior.ClientCascade'
 // kaskadowe usuwanie bêdzie automatyczne jeœli mamy powi¹zane encje (z u¿yciem 'Include')
 
-app.MapDelete("delete", async (MyBoardsContext db) => 
+app.MapDelete("delete", async (MyBoardsContext db) =>
 {
     var user = await db.Users
         .Include(u => u.Comments)
