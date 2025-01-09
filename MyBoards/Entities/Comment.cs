@@ -9,11 +9,11 @@
 
         // relacja jeden do wielu
 
-        public WorkItem WorkItem { get; set; }
+        public  WorkItem WorkItem { get; set; }
 
         public int WorkItemId { get; set; }
 
-        public User Author { get; set; }
+        public  User Author { get; set; }
         public Guid AuthorId { get; set; }
 
 

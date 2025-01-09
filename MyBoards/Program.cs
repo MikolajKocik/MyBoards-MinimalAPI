@@ -17,7 +17,9 @@ builder.Services.Configure<JsonOptions>(options =>
 });
 
 builder.Services.AddDbContext<MyBoardsContext>(
-    option => option.UseSqlServer(builder.Configuration.GetConnectionString("MyBoardsConnectionString"))
+    option => option
+    //.UseLazyLoadingProxies()
+    .UseSqlServer(builder.Configuration.GetConnectionString("MyBoardsConnectionString"))
     );
 
 var app = builder.Build();
@@ -80,6 +82,25 @@ app.MapGet("ViewModel_data", async (MyBoardsContext db) =>
     var topAuthors = db.ViewTopAuthors.ToList();
     return topAuthors;
 });
+
+/* Lazy loading (paczka Nuget Proxies)
+
+app.MapGet("LazyLoading_data", async (MyBoardsContext db) =>
+{
+    var withAddress = true;
+
+    var user = db.Users
+        .First(u => u.Id == Guid.Parse("8B49FE0E-AC8F-4521-CBC8-08DA10AB0E61"));
+
+    if (withAddress)
+    {
+        var result = new { FullName = user.FullName, Address =  $"{user.Address.Street} {user.Address.City}"};
+        return result;
+    }
+
+    return new { FullName = user.FullName, Address = "-"};
+});
+*/
 
 // przy u¿yciu 'FromSqlRaw' z parametrem minWorkItemsCount, kod by³by podatny na ataki sql injection
 // RawSql u¿ywamy gdy nie da siê napisaæ polecenia w LINQ 

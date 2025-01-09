@@ -11,7 +11,7 @@ namespace MyBoards.Entities
         public string Street { get; set; }
         public string? PostalCode { get; set; }
 
-        public User User { get; set; }
+        public  User User { get; set; } // lazy loading
         public Guid UserId { get; set; } // musi odpowiadać właściwości referencji do encji 'User'
         public Coordinate Coordinate { get; set; }
     }
@@ -21,4 +21,6 @@ namespace MyBoards.Entities
         public decimal? Longitude { get; set; }
         public decimal? Latitude { get; set; }
     }
+
+
 }
