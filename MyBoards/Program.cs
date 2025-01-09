@@ -75,6 +75,12 @@ if (!users.Any())
     dbContext.SaveChanges();
 }
 
+app.MapGet("ViewModel_data", async (MyBoardsContext db) =>
+{
+    var topAuthors = db.ViewTopAuthors.ToList();
+    return topAuthors;
+});
+
 // przy u¿yciu 'FromSqlRaw' z parametrem minWorkItemsCount, kod by³by podatny na ataki sql injection
 // RawSql u¿ywamy gdy nie da siê napisaæ polecenia w LINQ 
 // metody muszê zwracaæ dok³adnie taki model jaki mam w DbSet (nie moze zabrakn¹æ danej kolumny (pola))

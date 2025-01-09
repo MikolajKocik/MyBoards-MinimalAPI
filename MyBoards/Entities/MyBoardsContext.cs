@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.SqlServer;
+using MyBoards.Entities.ViewModels;
 
 namespace MyBoards.Entities
 {
@@ -19,6 +20,9 @@ namespace MyBoards.Entities
         public DbSet<Address> Addresses { get; set; }
         public DbSet<WorkItemState> WorkItemStates { get; set; }
         public DbSet<WorkItemTag> WorkItemTag { get; set; } // dla tabeli łączącej
+        public DbSet<TopAuthor> ViewTopAuthors { get; set; } // ViewModel (działania takie jak dodawanie,
+                                                             // usuwanie, modyfikacja nie są możliwe
+                                                             // dla DbSet View modelu
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -67,7 +71,7 @@ namespace MyBoards.Entities
 
                 // relacja wiele do wielu z tabelą łączącą co zawiera konkretne powiązania
 
-                eb.HasMany(wi => wi.Tags)   
+                eb.HasMany(wi => wi.Tags)
                 .WithMany(t => t.WorkItems)
                 .UsingEntity<WorkItemTag>(
                      wi => wi.HasOne(wit => wit.Tag)
@@ -113,6 +117,15 @@ namespace MyBoards.Entities
                 new WorkItemState() { Id = 2, Value = "Doing" },
                 new WorkItemState() { Id = 3, Value = "Done" });
             // musimy okreslić konkretne wartości do seedowania dla tych 3 nowych obiektów dla EF
+
+            // view model
+
+            modelBuilder.Entity<TopAuthor>(eb =>
+            {
+                // mapujemy widok do danej encji
+                eb.ToView("View_TopAuthors");
+                eb.HasNoKey();
+            });
         }
 
     }
