@@ -1,4 +1,7 @@
-﻿namespace MyBoards.Entities
+﻿using Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure;
+using Microsoft.EntityFrameworkCore;
+
+namespace MyBoards.Entities
 {
     public class Address
     {
@@ -10,5 +13,12 @@
 
         public User User { get; set; }
         public Guid UserId { get; set; } // musi odpowiadać właściwości referencji do encji 'User'
+        public Coordinate Coordinate { get; set; }
+    }
+
+    public class Coordinate
+    {
+        public decimal? Longitude { get; set; }
+        public decimal? Latitude { get; set; }
     }
 }
