@@ -2,7 +2,9 @@ using Microsoft.AspNetCore.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using MyBoards.Entities;
 using System;
+using System.Linq.Expressions;
 using System.Text.Json.Serialization;
+using MyBoards.Dto;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -83,34 +85,59 @@ app.MapGet("ViewModel_data", async (MyBoardsContext db) =>
     return topAuthors;
 });
 
-/* Lazy loading (paczka Nuget Proxies)
-
-app.MapGet("LazyLoading_data", async (MyBoardsContext db) =>
+app.MapGet("pagination", async (MyBoardsContext db) =>
 {
-    var withAddress = true;
+    // Dane wejœciowe symuluj¹ce parametry u¿ytkownika
+    var filter = "a"; // Wyszukiwanie po fragmencie tekstu w polach Email lub FullName
+    string sortBy = "FullName"; // Kolumna do sortowania
+    bool sortByDescending = false; // Kierunek sortowania (false = rosn¹co)
+    int pageNumber = 1; // Numer strony (1 = pierwsza strona)
+    int pageSize = 10; // Liczba rekordów na stronie
 
-    var user = db.Users
-        .First(u => u.Id == Guid.Parse("8B49FE0E-AC8F-4521-CBC8-08DA10AB0E61"));
+    // Filtrowanie wyników
+    var query = db.Users
+        .Where(u => filter == null || // Bez filtra pobieramy wszystkie dane
+                    (u.Email.ToLower().Contains(filter.ToLower()) ||
+                     u.FullName.ToLower().Contains(filter.ToLower())));
 
-    if (withAddress)
+    // Liczenie wszystkich rekordów spe³niaj¹cych filtr (potrzebne do paginacji)
+    var totalCount = query.Count();
+
+    // Dodanie sortowania, jeœli okreœlono kolumnê
+    if (sortBy != null)
     {
-        var result = new { FullName = user.FullName, Address =  $"{user.Address.Street} {user.Address.City}"};
-        return result;
+        var columnsSelector = new Dictionary<string, Expression<Func<User, object>>>
+        {
+            {nameof(User.Email), user => user.Email},
+            {nameof(User.FullName), user => user.FullName }
+        };
+
+        // Wybór kolumny do sortowania
+        var sortByExpression = columnsSelector[sortBy];
+
+        // Sortowanie: rosn¹co lub malej¹co
+        query = sortByDescending
+            ? query.OrderByDescending(sortByExpression)
+            : query.OrderBy(sortByExpression);
     }
 
-    return new { FullName = user.FullName, Address = "-"};
-});
-*/
+    // Paginacja: pomijamy rekordy z poprzednich stron i pobieramy dane dla bie¿¹cej
+    var result = query.Skip(pageSize * (pageNumber - 1))
+                      .Take(pageSize)
+                      .ToList();
 
-// przy u¿yciu 'FromSqlRaw' z parametrem minWorkItemsCount, kod by³by podatny na ataki sql injection
-// RawSql u¿ywamy gdy nie da siê napisaæ polecenia w LINQ 
-// metody muszê zwracaæ dok³adnie taki model jaki mam w DbSet (nie moze zabrakn¹æ danej kolumny (pola))
+    // Przygotowanie wyniku z danymi dla bie¿¹cej strony i metadanymi paginacji
+    var pageResult = new PageResult<User>(result, totalCount, pageSize, pageNumber);
+
+    return pageResult;
+});
+
 
 app.MapGet("RawSQL_data", async (MyBoardsContext db) =>
 {
     var minWorkItemsCount = "85";
 
-    var states = db.WorkItemStates  
+    var states = db.WorkItemStates
     .FromSqlInterpolated($@"        
     SELECT wis.Id, wis.Value
     FROM WorkItemStates wis
