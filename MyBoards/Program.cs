@@ -5,9 +5,16 @@ using System;
 using System.Linq.Expressions;
 using System.Text.Json.Serialization;
 using MyBoards.Dto;
+using MyBoards;
+using Sieve.Services;
+using MyBoards.Sieve;
+using Sieve.Models;
+using Microsoft.AspNetCore.Mvc;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddScoped<ISieveProcessor, ApplicationSieveProcessor>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -48,36 +55,7 @@ if (pendingMigrations.Any())
     dbContext.Database.Migrate();
 }
 
-// customowa logika seedowania
-
-var users = dbContext.Users.ToList();
-if (!users.Any())
-{
-    var user1 = new User()
-    {
-        Email = "user1@test.com",
-        FullName = "User One",
-        Address = new Address()
-        {
-            City = "Warszawa",
-            Street = "Szeroka"
-        }
-    };
-
-    var user2 = new User()
-    {
-        Email = "user2@test.com",
-        FullName = "User Two",
-        Address = new Address()
-        {
-            City = "Kraków",
-            Street = "D³uga"
-        }
-    };
-
-    dbContext.Users.AddRange(user1, user2);
-    dbContext.SaveChanges();
-}
+DataGenerator.Seed(dbContext); // wygenerowanie danych za pomoc¹ paczki Bogus
 
 app.MapGet("ViewModel_data", async (MyBoardsContext db) =>
 {
@@ -132,81 +110,21 @@ app.MapGet("pagination", async (MyBoardsContext db) =>
     return pageResult;
 });
 
-
-app.MapGet("RawSQL_data", async (MyBoardsContext db) =>
-{
-    var minWorkItemsCount = "85";
-
-    var states = db.WorkItemStates
-    .FromSqlInterpolated($@"        
-    SELECT wis.Id, wis.Value
-    FROM WorkItemStates wis
-    JOIN WorkItems wi on wi.StateId = wis.Id
-    GROUP BY wis.Id, wis.Value
-    HAVING COUNT(*) > {minWorkItemsCount}"
-    )
-    .ToList();
-
-    // w zale¿noœci czy korzystamy z parametru czy nie, wybieramy bezpoœredni¹ opcjê sql (dla bezppoœr. zapytañ)
-
-    db.Database.ExecuteSqlRaw(@"
-    UPDATE Comments
-    SET UpdatedDate = GETDATE()
-    WHERE AuthorId = '888FF7E0-E791-4EFE-CC0A-08DA10AB0E61'");
-
-    var entries = db.ChangeTracker.Entries();
-
-    return states;
-});
-
-// je¿eli mamy dane, które nie s¹ modyfikowane mo¿emy zoptymalizacowaæ dane przy u¿yciu EF
-// poniewa¿ nie bêd¹ œledzone przez czêœæ Trackera
-
-app.MapGet("ChangeTracker_NoTracking", async (MyBoardsContext db) =>
-{
-    var states = db.WorkItemStates
-    .AsNoTracking()
-    .ToList();
-
-    var entries1 = db.ChangeTracker.Entries();
-
-    return states;
-});
-
-app.MapGet("data_ChangeTracker", async (MyBoardsContext db) =>
-{
-    var workItem = new Epic()
-    {
-        Id = 2
-    };
-
-    var entry = db.Attach(workItem); //dbcontext œledzi workItem o konkretnym Id
-    entry.State = EntityState.Deleted; // ustawiony stan na delete (musi wykonaæ polecenie delete z tabeli workItems)
-
-    db.SaveChanges();
-
-    return workItem;
-});
-
-// Include zawiera w sobie Join dlatego jest lepszy ni¿ tworzenie osobnego zapytania
-// ThenInclude - jeœli chcemy coœ do³¹czyæ do do³¹czonej encji 
-// Metody te pozwalaj¹ na ³adowanie w³aœciwoœci powi¹zanych w naszych encjach.
-
 app.MapGet("data", async (MyBoardsContext db) =>
 {
-    var user = await db.Users
-    .Include(u => u.Comments).ThenInclude(w => w.WorkItem)
-    .Include(a => a.Address)
-    .FirstAsync(u => u.Id == Guid.Parse("68366DBE-0809-490F-CC1D-08DA10AB0E61"));
+    var userComments = await db.Users
+    .Include(u => u.Comments)
+    .Include(u => u.Address)
+    .Where(u => u.Address.Country == "Albania")
+    .SelectMany(u => u.Comments)
+    .Select(c => c.Message)
+    .ToListAsync();
 
-
-    // var userComments = await db.Comments.Where(c => c.AuthorId == user.Id).ToListAsync();
-
-    return user;
+    return userComments;
 
 });
 
-app.MapPost("update", async (MyBoardsContext db) =>
+app.MapPut("update", async (MyBoardsContext db) =>
 {
     Epic epic = await db.Epics.FirstAsync(epic => epic.Id == 1);
 
@@ -218,6 +136,15 @@ app.MapPost("update", async (MyBoardsContext db) =>
 
     return epic;
 
+});
+
+app.MapPost("sieve", async ([FromBody]SieveModel query, ISieveProcessor sieveProcessor, MyBoardsContext db) =>
+{
+    var epics = db.Epics
+    .Include(e => e.Author)
+    .AsQueryable();
+
+    sieveProcessor.Apply(query, epics);
 });
 
 app.MapPost("create", async (MyBoardsContext db) =>
@@ -234,50 +161,14 @@ app.MapPost("create", async (MyBoardsContext db) =>
 
     var tags = new List<Tag>() { mvcTag, aspTag };
 
-    await db.Tags.AddRangeAsync(mvcTag, aspTag); //AddRange w porównianiu do Add pozwala na dodanie wielu wartoœci encji jednorazowo
+    await db.Tags.AddRangeAsync(mvcTag, aspTag); 
     await db.SaveChangesAsync();
 
     return tags;
 });
 
-app.MapPost("createWithDependency", async (MyBoardsContext db) =>
-{
-    var address = new Address()
-    {
-        Id = Guid.NewGuid(),
-        City = "Kraków",
-        Country = "Poland",
-        Street = "D³uga"
-    };
-
-    var user = new User()
-    {
-        Email = "user@test.com",
-        FullName = "Test User",
-        Address = address,
-    };
-
-    db.Users.Add(user);
-    await db.SaveChangesAsync();
-
-    // Tworzenie DTO
-    var result = new
-    {
-        user.Email,
-        user.FullName,
-        Address = new
-        {
-            address.City,
-            address.Country,
-            address.Street
-        }
-    };
-
-    return result;
-});
-
 // po zmianie w dbcontext z 'DeleteBehavior.NoAction' na 'DeleteBehavior.ClientCascade'
-// kaskadowe usuwanie bêdzie automatyczne jeœli mamy powi¹zane encje (z u¿yciem 'Include')
+// kaskadowe usuwanie bêdzie automatyczne jeœli mamy powi¹zane encje
 
 app.MapDelete("delete", async (MyBoardsContext db) =>
 {
@@ -290,7 +181,6 @@ app.MapDelete("delete", async (MyBoardsContext db) =>
     await db.SaveChangesAsync();
 
 });
-
 
 app.Run();
 
