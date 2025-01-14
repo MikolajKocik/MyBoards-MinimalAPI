@@ -20,10 +20,11 @@ builder.Services.AddSwaggerGen();
 
 // podczas serializacji zostanie pominiêta nieskoñczonoa referencja miêdzy zale¿noœciami, która jest zapêtlona
 
-builder.Services.Configure<JsonOptions>(options =>
+builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(options =>
 {
-    options.SerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+    options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
 });
+
 
 builder.Services.AddDbContext<MyBoardsContext>(
     option => option
@@ -144,7 +145,25 @@ app.MapPost("sieve", async ([FromBody]SieveModel query, ISieveProcessor sievePro
     .Include(e => e.Author)
     .AsQueryable();
 
-    sieveProcessor.Apply(query, epics);
+    var dtos = await sieveProcessor
+    .Apply(query, epics)
+    .Select(e => new EpicDto()
+    {
+        Id = e.Id,
+        Area = e.Area,
+        Priority = e.Priority,
+        StarDate = e.StartDate,
+        AuthorFullName = e.Author.FullName
+    })
+    .ToListAsync();
+
+    var totalCount = await sieveProcessor
+    .Apply(query, epics, applyPagination: false, applySorting: false)
+    .CountAsync();
+
+    var result = new PageResult<EpicDto>(dtos, totalCount, query.PageSize.Value, query.Page.Value);
+
+    return result;
 });
 
 app.MapPost("create", async (MyBoardsContext db) =>
